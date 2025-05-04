@@ -1,5 +1,8 @@
 # parser.py
 from collections import defaultdict
+import pandas as pd
+from io import StringIO
+import sys
 
 EPSILON = 'ε'
 
@@ -167,56 +170,54 @@ def construir_tabla_ll1(reglas, grammar, terminales):
     return tabla
 
 def analizar_cadena(cadena, tabla, grammar, inicio):
-    cadena += "$"
-    pila = [inicio]
-    idx = 0
-    pasos = []
+    output = []
+    cadena = cadena.strip().split() + ["$"]
+    pila = ["$", inicio]
 
     while True:
         pila_str = ' '.join(pila)
-        entrada_str = cadena[idx:]
-        paso = {"pila": pila_str, "entrada": entrada_str, "accion": ""}
-        if not pila and cadena[idx] == "$":
-            paso["accion"] = "CADENA VÁLIDA"
-            pasos.append(paso)
+        entrada_str = ' '.join(cadena)
+
+        if pila == ["$"] and cadena == ["$"]:
+            output.append((pila_str, entrada_str, "CADENA VÁLIDA"))
             break
+
         if not pila:
-            paso["accion"] = "Error: pila vacía"
-            pasos.append(paso)
+            output.append((pila_str, entrada_str, "Error: pila vacía"))
+            output.append(("", "", "CADENA NO VÁLIDA"))
             break
 
         tope = pila[-1]
-        simbolo = cadena[idx] if idx < len(cadena) else "$"
+        simbolo = cadena[0]
 
-        if grammar.get(tope, {}).get('tipo') in ["I", "V"]:
-            regla = tabla[tope].get(simbolo, [])
-            if regla:
-                produccion = next(iter(regla))
+        if grammar.get(tope, {}).get("tipo") in ["I", "V"]:
+            reglas = list(tabla[tope].get(simbolo, []))
+            if reglas:
+                regla = reglas[0]
                 pila.pop()
-                if list(produccion[1]) != [EPSILON]:
-                    pila += list(reversed(produccion[1]))
-                paso["accion"] = f"Regla: {produccion[0]} → {' '.join(produccion[1])}"
+                if list(regla[1]) != ['#']:
+                    pila += list(reversed(regla[1]))
+                produccion_str = f"{regla[0]} → {' '.join(regla[1]) if list(regla[1]) != ['#'] else EPSILON}"
+                output.append((' '.join(pila), ' '.join(cadena), f"Regla: {produccion_str}"))
             else:
-                if simbolo in grammar[tope]['follow'] or simbolo == "$":
-                    pila.pop()
-                    paso["accion"] = "Recuperación: EXT"
-                else:
-                    idx += 1
-                    paso["accion"] = "Recuperación: EXP"
-        elif grammar.get(tope, {}).get('tipo') == "T":
+                output.append((pila_str, entrada_str, f"Error: no hay regla para {tope} con '{simbolo}'"))
+                output.append(("", "", "CADENA NO VÁLIDA"))
+                break
+
+        elif grammar.get(tope, {}).get("tipo") == "T":
             if tope == simbolo:
                 pila.pop()
-                idx += 1
-                paso["accion"] = f"Match: {simbolo}"
+                cadena.pop(0)
+                output.append((' '.join(pila), ' '.join(cadena), f"Match: {simbolo}"))
             else:
-                paso["accion"] = "Error: token inesperado"
-                pasos.append(paso)
+                output.append((pila_str, entrada_str, f"Error: se esperaba '{tope}' pero se encontró '{simbolo}'"))
+                output.append(("", "", "CADENA NO VÁLIDA"))
                 break
+
         else:
-            paso["accion"] = "Error: símbolo desconocido"
-            pasos.append(paso)
+            output.append((pila_str, entrada_str, "Error: símbolo desconocido en pila"))
+            output.append(("", "", "CADENA NO VÁLIDA"))
             break
 
-        pasos.append(paso)
-
-    return pasos
+    df = pd.DataFrame(output, columns=["Pila", "Entrada", "Acción"])
+    return df

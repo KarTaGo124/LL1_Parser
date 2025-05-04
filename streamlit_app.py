@@ -1,112 +1,96 @@
-# streamlit_app.py
 import streamlit as st
 import pandas as pd
 from parser import (
-    reemplazar_epsilon, extraer_variables_terminales, inicializar_gramatica,
-    calcular_first, calcular_follow, construir_tabla_ll1,
-    tiene_recursion_izquierda, tiene_factorizacion_izquierda,
-    eliminar_recursion_izquierda, factorizar_por_izquierda,
-    es_ll1, analizar_cadena
+    reemplazar_epsilon,
+    extraer_variables_terminales,
+    eliminar_recursion_izquierda,
+    factorizar_por_izquierda,
+    tiene_recursion_izquierda,
+    tiene_factorizacion_izquierda,
+    es_ll1,
+    inicializar_gramatica,
+    calcular_first,
+    calcular_follow,
+    construir_tabla_ll1,
+    analizar_cadena
 )
 
-st.set_page_config(page_title="LL(1) Analyzer", layout="wide")
+st.set_page_config(page_title="Analizador LL(1)", layout="wide")
 
-st.title("📘 Análisis Sintáctico LL(1) con Transformación Automática")
-st.markdown("""
-Ingresa una gramática en formato BNF. Separa producciones alternativas con `|` y usa `ε` (epsilon) para la cadena vacía.
+st.title("🔍 Analizador Sintáctico LL(1)")
+st.markdown("Sube tu gramática y analiza cadenas paso a paso. Las producciones con ε representan la cadena vacía.")
 
-**Ejemplo:**
-```
-E -> E + T | T
-T -> T * F | F
-F -> ( E ) | id
-```
-""")
+gram_input = st.text_area("📘 Gramática (una producción por línea, usar 'ε' para vacía):",
+                           value="""E -> T E'
+E' -> + T E' | ε
+T -> F T'
+T' -> * F T' | ε
+F -> ( E ) | id""", height=200)
+input_str = st.text_input("✍️ Cadena a analizar (tokens separados por espacio):", "id + id * id")
 
-gramatica_texto = st.text_area("✍️ Gramática:", height=200, value="""
-E -> E + T | T
-T -> T * F | F
-F -> ( E ) | id
-""")
-
-cadena_input = st.text_input("🧪 Cadena a analizar (tokens separados por espacio):", "id + id * id")
-
-if st.button("Analizar Gramática"):
-    reglas_raw = [r.strip() for r in gramatica_texto.splitlines() if r.strip()]
+if st.button("Procesar Gramática"):
+    reglas_raw = [line.strip() for line in gram_input.strip().splitlines() if line.strip()]
     reglas = []
-    for r in reglas_raw:
-        if "->" not in r: continue
-        izq, der = r.split("->")
-        for prod in der.split("|"):
-            reglas.append((izq.strip(), prod.strip().split()))
+    for linea in reglas_raw:
+        izq, der = linea.split("->")
+        izq = izq.strip()
+        for alt in der.split("|"):
+            prod = alt.strip().split()
+            reglas.append((izq, prod if prod != ['ε'] else ['ε']))
 
     reglas = reemplazar_epsilon(reglas)
+
+    if tiene_recursion_izquierda(reglas):
+        reglas = eliminar_recursion_izquierda(reglas)
+        st.warning("⚠️ Recursión por izquierda eliminada.")
+
+    if tiene_factorizacion_izquierda(reglas):
+        reglas = factorizar_por_izquierda(reglas)
+        st.warning("⚠️ Gramática factorizada por izquierda.")
+
     variables, terminales = extraer_variables_terminales(reglas)
     inicio = reglas[0][0]
     grammar = inicializar_gramatica(variables, terminales, inicio)
     calcular_first(reglas, grammar)
     calcular_follow(reglas, grammar)
+    tabla = construir_tabla_ll1(reglas, grammar, terminales)
 
-    necesita_transformacion = not es_ll1(reglas)
+    st.subheader("📊 Tabla de Símbolos")
+    data = []
+    for simbolo, info in grammar.items():
+        if info['tipo'] in ['V', 'I']:
+            data.append({
+                "Símbolo": simbolo,
+                "FIRST": ', '.join(info['first']),
+                "FOLLOW": ', '.join(info['follow'])
+            })
+    st.dataframe(pd.DataFrame(data))
 
-    if necesita_transformacion:
-        st.warning("La gramática no es LL(1). Aplicando transformaciones...")
-        if tiene_recursion_izquierda(reglas):
-            reglas = eliminar_recursion_izquierda(reglas)
-        if tiene_factorizacion_izquierda(reglas):
-            reglas = factorizar_por_izquierda(reglas)
-        reglas = reemplazar_epsilon(reglas)
-        variables, terminales = extraer_variables_terminales(reglas)
-        grammar = inicializar_gramatica(variables, terminales, inicio)
-        calcular_first(reglas, grammar)
-        calcular_follow(reglas, grammar)
-        st.success("Gramática transformada a LL(1).")
-    else:
-        st.success("La gramática es LL(1).")
-
-    st.subheader("📑 Reglas resultantes")
-    for izq, der in reglas:
-        st.text(f"{izq} → {' '.join(der)}")
-
-    st.subheader("📊 Tablas FIRST y FOLLOW")
-    tabla = []
-    for simbolo in variables:
-        tabla.append({
-            "Simbolo": simbolo,
-            "FIRST": ", ".join(grammar[simbolo]["first"]),
-            "FOLLOW": ", ".join(grammar[simbolo]["follow"])
-        })
-    st.dataframe(pd.DataFrame(tabla))
-
-    st.subheader("📘 Tabla LL(1)")
-    tabla_ll1 = construir_tabla_ll1(reglas, grammar, terminales)
-    matriz = []
-    columnas = terminales + ["$"]
-    for nt in tabla_ll1:
-        fila = {"NT": nt}
+    st.subheader("📐 Tabla LL(1)")
+    ll1_data = {nt: {} for nt in tabla}
+    columnas = terminales + ['$']
+    for nt in tabla:
         for t in columnas:
-            producciones = tabla_ll1[nt][t]
-            if producciones:
-                fila[t] = " / ".join([f"{izq} → {' '.join(der)}" for izq, der in producciones])
+            reglas_set = tabla[nt][t]
+            if reglas_set:
+                reglas_str = ' | '.join(f"{izq} → {' '.join(der) if der != ('ε',) else 'ε'}" for izq, der in reglas_set)
+                ll1_data[nt][t] = reglas_str
             else:
-                first = set(grammar[nt]['first'])
-                follow = set(grammar[nt]['follow'])
-                if t in follow or t == "$":
-                    fila[t] = "EXT"
-                elif t not in first.union(follow):
-                    fila[t] = "EXP"
+                if t in grammar[nt]['follow']:
+                    ll1_data[nt][t] = 'EXT'
                 else:
-                    fila[t] = ""
-        matriz.append(fila)
-    st.dataframe(pd.DataFrame(matriz).set_index("NT"))
+                    ll1_data[nt][t] = 'EXP'
+    st.dataframe(pd.DataFrame(ll1_data).fillna("-").T)
 
-    st.subheader("🔍 Análisis de cadena")
-    pasos = analizar_cadena(cadena_input.strip(), tabla_ll1, grammar, inicio)
-    df_pasos = pd.DataFrame(pasos)
-    df_pasos = df_pasos.rename(columns={"pila": "📌 Pila", "entrada": "🎯 Entrada", "accion": "🔄 Acción"})
-    st.dataframe(df_pasos, use_container_width=True)
+    st.subheader("🧾 Análisis de la cadena")
+    import io
+    import sys
 
-    if pasos and pasos[-1]['accion'] == "CADENA VÁLIDA":
-        st.success("✅ La cadena fue aceptada.")
-    else:
-        st.error("❌ La cadena fue rechazada.")
+    # Redirigir stdout temporalmente para capturar la salida
+    output = io.StringIO()
+    sys.stdout = output
+    analizar_cadena(input_str, tabla, grammar, inicio)
+    sys.stdout = sys.__stdout__
+
+    # Mostrar salida
+    st.code(output.getvalue())

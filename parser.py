@@ -20,7 +20,6 @@ def extraer_variables_terminales(reglas):
                 terminales.add(simbolo)
     return sorted(variables), sorted(terminales)
 
-
 def eliminar_recursion_izquierda(reglas):
     nuevas_reglas = []
     agrupadas = defaultdict(list)
@@ -49,7 +48,6 @@ def eliminar_recursion_izquierda(reglas):
 
     return nuevas_reglas
 
-
 def factorizar_por_izquierda(reglas):
     agrupadas = defaultdict(list)
     for izq, der in reglas:
@@ -74,13 +72,11 @@ def factorizar_por_izquierda(reglas):
 
     return nuevas_reglas
 
-
 def tiene_recursion_izquierda(reglas):
     for izq, der in reglas:
         if der and der[0] == izq:
             return True
     return False
-
 
 def tiene_factorizacion_izquierda(reglas):
     agrupadas = defaultdict(list)
@@ -92,10 +88,18 @@ def tiene_factorizacion_izquierda(reglas):
             return True
     return False
 
-
 def es_ll1(reglas):
     return not tiene_recursion_izquierda(reglas) and not tiene_factorizacion_izquierda(reglas)
 
+def inicializar_gramatica(variables, terminales, inicio):
+    grammar = {}
+    for v in variables:
+        grammar[v] = {"tipo": "V", "first": [], "follow": []}
+    grammar[inicio]["tipo"] = "I"
+    for t in terminales:
+        grammar[t] = {"tipo": "T", "first": [t]}
+    grammar[inicio]["follow"] = ["$"]
+    return grammar
 
 def calcular_first(reglas, grammar):
     cambio = True
@@ -119,7 +123,6 @@ def calcular_first(reglas, grammar):
                         grammar[izq]['first'].append(EPSILON)
                         cambio = True
 
-
 def calcular_follow(reglas, grammar):
     cambio = True
     while cambio:
@@ -139,18 +142,6 @@ def calcular_follow(reglas, grammar):
                     if not set(temp).issubset(grammar[simbolo]['follow']):
                         grammar[simbolo]['follow'].extend(temp)
                         cambio = True
-
-
-def inicializar_gramatica(variables, terminales, inicio):
-    grammar = {}
-    for v in variables:
-        grammar[v] = {"tipo": "V", "first": [], "follow": []}
-    grammar[inicio]["tipo"] = "I"
-    for t in terminales:
-        grammar[t] = {"tipo": "T", "first": [t]}
-    grammar[inicio]["follow"] = ["$"]
-    return grammar
-
 
 def construir_tabla_ll1(reglas, grammar, terminales):
     tabla = {v: {t: set() for t in terminales + ['$']} for v in grammar if grammar[v]['tipo'] in ['V', 'I']}
@@ -174,7 +165,6 @@ def construir_tabla_ll1(reglas, grammar, terminales):
                 for f in grammar[izq]['follow']:
                     tabla[izq][f].add((izq, tuple(der)))
     return tabla
-
 
 def analizar_cadena(cadena, tabla, grammar, inicio):
     cadena += "$"
@@ -203,7 +193,7 @@ def analizar_cadena(cadena, tabla, grammar, inicio):
             if regla:
                 produccion = next(iter(regla))
                 pila.pop()
-                if produccion[1] != [EPSILON]:
+                if list(produccion[1]) != [EPSILON]:
                     pila += list(reversed(produccion[1]))
                 paso["accion"] = f"Regla: {produccion[0]} → {' '.join(produccion[1])}"
             else:

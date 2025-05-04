@@ -97,7 +97,6 @@ if st.button("Procesar Gramática"):
 
 # Colaboradores
 st.markdown("---")
-st.markdown("### 👨‍💻 Colaboradores")
 st.markdown(
     """
     <div style='text-align: center; padding: 20px;'>

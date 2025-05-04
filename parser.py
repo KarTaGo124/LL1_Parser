@@ -1,15 +1,14 @@
 # parser.py
 from collections import defaultdict
 import pandas as pd
-from io import StringIO
-import sys
 
 EPSILON = 'ε'
 
-# Utilidades
 
+# Utilidades para transformación de la gramática
 def reemplazar_epsilon(reglas):
     return [(izq, [EPSILON] if der == ['#'] else der) for izq, der in reglas]
+
 
 def extraer_variables_terminales(reglas):
     variables = set()
@@ -22,6 +21,7 @@ def extraer_variables_terminales(reglas):
             elif simbolo != EPSILON:
                 terminales.add(simbolo)
     return sorted(variables), sorted(terminales)
+
 
 def eliminar_recursion_izquierda(reglas):
     nuevas_reglas = []
@@ -51,6 +51,7 @@ def eliminar_recursion_izquierda(reglas):
 
     return nuevas_reglas
 
+
 def factorizar_por_izquierda(reglas):
     agrupadas = defaultdict(list)
     for izq, der in reglas:
@@ -75,11 +76,13 @@ def factorizar_por_izquierda(reglas):
 
     return nuevas_reglas
 
+
 def tiene_recursion_izquierda(reglas):
     for izq, der in reglas:
         if der and der[0] == izq:
             return True
     return False
+
 
 def tiene_factorizacion_izquierda(reglas):
     agrupadas = defaultdict(list)
@@ -91,9 +94,12 @@ def tiene_factorizacion_izquierda(reglas):
             return True
     return False
 
+
 def es_ll1(reglas):
     return not tiene_recursion_izquierda(reglas) and not tiene_factorizacion_izquierda(reglas)
 
+
+# Inicialización y cálculos para la gramática
 def inicializar_gramatica(variables, terminales, inicio):
     grammar = {}
     for v in variables:
@@ -103,6 +109,7 @@ def inicializar_gramatica(variables, terminales, inicio):
         grammar[t] = {"tipo": "T", "first": [t]}
     grammar[inicio]["follow"] = ["$"]
     return grammar
+
 
 def calcular_first(reglas, grammar):
     cambio = True
@@ -116,15 +123,18 @@ def calcular_first(reglas, grammar):
             else:
                 for simbolo in der:
                     nuevos = [x for x in grammar[simbolo]['first'] if x != EPSILON]
-                    if not set(nuevos).issubset(grammar[izq]['first']):
-                        grammar[izq]['first'].extend(nuevos)
-                        cambio = True
+                    if not set(nuevos).issubset(set(grammar[izq]['first'])):
+                        for nuevo in nuevos:
+                            if nuevo not in grammar[izq]['first']:
+                                grammar[izq]['first'].append(nuevo)
+                                cambio = True
                     if EPSILON not in grammar[simbolo]['first']:
                         break
                 else:
                     if EPSILON not in grammar[izq]['first']:
                         grammar[izq]['first'].append(EPSILON)
                         cambio = True
+
 
 def calcular_follow(reglas, grammar):
     cambio = True
@@ -142,9 +152,11 @@ def calcular_follow(reglas, grammar):
                             break
                     else:
                         temp += grammar[izq]['follow']
-                    if not set(temp).issubset(grammar[simbolo]['follow']):
-                        grammar[simbolo]['follow'].extend(temp)
+                    nuevos = [x for x in temp if x not in grammar[simbolo]['follow']]
+                    if nuevos:
+                        grammar[simbolo]['follow'].extend(nuevos)
                         cambio = True
+
 
 def construir_tabla_ll1(reglas, grammar, terminales):
     tabla = {v: {t: set() for t in terminales + ['$']} for v in grammar if grammar[v]['tipo'] in ['V', 'I']}
@@ -154,11 +166,17 @@ def construir_tabla_ll1(reglas, grammar, terminales):
             for f in grammar[izq]['follow']:
                 tabla[izq][f].add((izq, tuple(der)))
         else:
+            all_nullable = True
             for s in der:
-                first_alpha += [x for x in grammar[s]['first'] if x != EPSILON]
-                if EPSILON not in grammar[s]['first']:
+                first_s = grammar[s]['first']
+                for item in first_s:
+                    if item != EPSILON:
+                        first_alpha.append(item)
+                if EPSILON not in first_s:
+                    all_nullable = False
                     break
-            else:
+
+            if all_nullable:
                 first_alpha.append(EPSILON)
 
             for t in first_alpha:
@@ -169,7 +187,11 @@ def construir_tabla_ll1(reglas, grammar, terminales):
                     tabla[izq][f].add((izq, tuple(der)))
     return tabla
 
+
 def analizar_cadena(cadena, tabla, grammar, inicio):
+    """
+    Analiza una cadena mediante el método LL(1) y devuelve un DataFrame con el seguimiento.
+    """
     output = []
     cadena = cadena.strip().split() + ["$"]
     pila = ["$", inicio]
@@ -193,11 +215,11 @@ def analizar_cadena(cadena, tabla, grammar, inicio):
         if grammar.get(tope, {}).get("tipo") in ["I", "V"]:
             reglas = list(tabla[tope].get(simbolo, []))
             if reglas:
-                regla = reglas[0]
+                regla = reglas[0]  # Tomamos la primera regla (podría haber conflictos)
                 pila.pop()
-                if list(regla[1]) != ['#']:
-                    pila += list(reversed(regla[1]))
-                produccion_str = f"{regla[0]} → {' '.join(regla[1]) if list(regla[1]) != ['#'] else EPSILON}"
+                if list(regla[1]) != [EPSILON]:
+                    pila.extend(reversed(list(regla[1])))
+                produccion_str = f"{regla[0]} → {' '.join(regla[1]) if list(regla[1]) != [EPSILON] else EPSILON}"
                 output.append((' '.join(pila), ' '.join(cadena), f"Regla: {produccion_str}"))
             else:
                 output.append((pila_str, entrada_str, f"Error: no hay regla para {tope} con '{simbolo}'"))
@@ -219,5 +241,4 @@ def analizar_cadena(cadena, tabla, grammar, inicio):
             output.append(("", "", "CADENA NO VÁLIDA"))
             break
 
-    df = pd.DataFrame(output, columns=["Pila", "Entrada", "Acción"])
-    return df
+    return pd.DataFrame(output, columns=["Pila", "Entrada", "Acción"])

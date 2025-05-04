@@ -156,85 +156,61 @@ def imprimir_tablas(grammar):
 
 # Analizar una cadena
 def analizar_cadena(cadena, tabla, grammar, inicio):
-    print("\nANÁLISIS LL(1)")
-    pila_fake = "" + inicio #edite 
-    cadena += "$"
-    pila = [inicio]
-    idx = 0
+    print("\nANÁLISIS LL(1) - Traza paso a paso")
+    print(f"{'Stack':<30} {'Input':<30} {'Acción'}")
+    print("-" * 90)
+
+    cadena = cadena.strip().split() + ["$"]
+    pila = ["$", inicio]
+
     while True:
         pila_str = ' '.join(pila)
-        entrada_str = cadena[idx:]
-        if len(pila) == 0 and cadena[idx] == '$':
+        entrada_str = ' '.join(cadena)
+
+        if pila == ["$"] and cadena == ["$"]:
             print(f"{pila_str:<30} {entrada_str:<30} CADENA VÁLIDA")
             break
+
         if not pila:
             print(f"{pila_str:<30} {entrada_str:<30} Error: pila vacía")
+            print("CADENA NO VÁLIDA")
             break
+
         tope = pila[-1]
-        simbolo = cadena[idx]
-        if grammar.get(tope, {}).get('tipo') in ["I", "V"]:
-            regla = tabla[tope].get(simbolo, [])
-            idx2 = idx
-            while simbolo.replace(" ", "") not in tabla[tope].keys() and idx < len(cadena):
-                idx2 += 1
-                simbolo = cadena[idx:idx2].replace(" ", "")
-                #print("simbolo: " + simbolo)
-                regla = tabla[tope].get(simbolo, [])
-            if simbolo.replace(" ", "") not in tabla[tope].keys():
-                print(f"{pila_str:<30} {entrada_str:<30} Error: cadena no válida")
-                break
-            #print("regla:") 
-            #print(regla)
+        simbolo = cadena[0]
 
-            if regla:
-                print(f"{pila_str:<30} {entrada_str:<30} Regla:" + ''.join([f"{izq} -> {' '.join(der)}" for izq, der in regla]))
-                
+        if grammar.get(tope, {}).get("tipo") in ["I", "V"]:
+            reglas = list(tabla[tope].get(simbolo, []))
+            if reglas:
+                regla = reglas[0]
                 pila.pop()
-                #print(tabla[tope].get(simbolo, []))
-                
-                for izq, der in regla:
-                    for i in reversed(der):
-                        if i != "EXP" and i != "EXT":
-                            if i != "#":
-                                pila.append(i)
-
-                #if regla[tope].values() != ['#']:
-                    #pila += regla[0][1][::-1]
-                        else:
-                            if simbolo in grammar[tope]['follow'] or simbolo == "$":
-                                print(f"{pila_str:<30} {entrada_str:<30} Recuperación: EXT")
-                                pila.pop()
-                            else:
-                                print(f"{pila_str:<30} {entrada_str:<30} Recuperación: EXP")
-                                idx += 1
-        elif grammar.get(tope, {}).get('tipo') == "T":
-
-
-            idx2 = idx
-            while simbolo.replace(" ", "") not in terminales and idx < len(cadena):
-                idx2 += 1
-                simbolo = cadena[idx:idx2].replace(" ", "")
-            if simbolo.replace(" ", "") not in terminales:
-                print(f"{pila_str:<30} {entrada_str:<30} Error: cadena no válida")
-                break
-
-            if tope == simbolo:
-                print(f"{pila_str:<30} {entrada_str:<30} Match: {simbolo}")
-                pila.pop()
-                if idx2 < len(cadena):
-                    idx = idx2 + 1
-                if idx >= len(cadena):
-                    idx = len(cadena) - 1
-                #print(f"idx: {idx}")
-                #print(len(cadena))                
-                #print("cadena: " + cadena[idx])
+                if list(regla[1]) != ['#']:
+                    pila += list(reversed(regla[1]))
+                produccion_str = f"{regla[0]} → {' '.join(regla[1]) if list(regla[1]) != ['#'] else 'ε'}"
+                print(f"{' '.join(pila):<30} {' '.join(cadena):<30} Regla: {produccion_str}")
             else:
-                print(f"{pila_str:<30} {entrada_str:<30} Error: token inesperado")
+                print(f"{pila_str:<30} {entrada_str:<30} Error: no hay regla para {tope} con '{simbolo}'")
+                print("CADENA NO VÁLIDA")
                 break
+
+        elif grammar.get(tope, {}).get("tipo") == "T":
+            if tope == simbolo:
+                pila.pop()
+                cadena.pop(0)
+                print(f"{' '.join(pila):<30} {' '.join(cadena):<30} Match: {simbolo}")
+            else:
+                print(f"{pila_str:<30} {entrada_str:<30} Error: se esperaba '{tope}' pero se encontró '{simbolo}'")
+                print("CADENA NO VÁLIDA")
+                break
+
         else:
-            print(f"{pila_str:<30} {entrada_str:<30} Error: símbolo desconocido")
+            print(f"{pila_str:<30} {entrada_str:<30} Error: símbolo desconocido en pila")
+            print("CADENA NO VÁLIDA")
             break
 
+
+
+# main(){}
 reglas = leer_gramatica("grammar.txt")
 variables, terminales = obtener_simbolos(reglas)
 inicio = reglas[0][0]

@@ -41,11 +41,13 @@ if st.button("Procesar Gramática"):
     if tiene_recursion_izquierda(reglas):
         reglas = eliminar_recursion_izquierda(reglas)
         st.warning("⚠️ Recursión por izquierda eliminada.")
+        st.code('\n'.join(f"{izq} -> {' '.join(der)}" for izq, der in reglas), language='bnf')
 
     # Verificar y factorizar por izquierda
     if tiene_factorizacion_izquierda(reglas):
         reglas = factorizar_por_izquierda(reglas)
         st.warning("⚠️ Gramática factorizada por izquierda.")
+        st.code('\n'.join(f"{izq} -> {' '.join(der)}" for izq, der in reglas), language='bnf')
 
     # Extraer variables y terminales
     variables, terminales = extraer_variables_terminales(reglas)

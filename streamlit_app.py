@@ -89,14 +89,22 @@ if st.button("Analizar Gramática"):
             if producciones:
                 fila[t] = " / ".join([f"{izq} → {' '.join(der)}" for izq, der in producciones])
             else:
-                fila[t] = ""
+                first = set(grammar[nt]['first'])
+                follow = set(grammar[nt]['follow'])
+                if t in follow or t == "$":
+                    fila[t] = "EXT"
+                elif t not in first.union(follow):
+                    fila[t] = "EXP"
+                else:
+                    fila[t] = ""
         matriz.append(fila)
     st.dataframe(pd.DataFrame(matriz).set_index("NT"))
 
     st.subheader("🔍 Análisis de cadena")
     pasos = analizar_cadena(cadena_input.strip(), tabla_ll1, grammar, inicio)
     df_pasos = pd.DataFrame(pasos)
-    st.dataframe(df_pasos)
+    df_pasos = df_pasos.rename(columns={"pila": "📌 Pila", "entrada": "🎯 Entrada", "accion": "🔄 Acción"})
+    st.dataframe(df_pasos, use_container_width=True)
 
     if pasos and pasos[-1]['accion'] == "CADENA VÁLIDA":
         st.success("✅ La cadena fue aceptada.")
